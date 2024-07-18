@@ -1,6 +1,16 @@
 # NanoGPT from scratch
 
 
+## Getting started
+1. Download the tiny Shakespeare dataset:
+
+```
+wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
+```
+
+2. 
+
+
 
 
 
