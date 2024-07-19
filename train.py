@@ -10,6 +10,7 @@ EVAL_INTERVAL = 300
 LEARNING_RATE = 1e-2
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 EVAL_ITERS = 200
+N_EMBED = 32
 
 # For reproducability
 torch.manual_seed(1337)
@@ -60,12 +61,14 @@ def estimate_loss():
 
 
 class BigramLanguageModel(nn.Module):
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, N_EMBED)
+        self.lm_head = nn.Linear(N_EMBED, vocab_size)
     
     def forward(self, idx, targets=None):
-        logits = self.token_embedding_table(idx) # (B, T, C)
+        tok_embed = self.token_embedding_table(idx) # (B, T, C)
+        logits = self.lm_head(tok_embed) # (B, T, vocab_size)
 
         if targets is None:
             loss = None
@@ -91,7 +94,7 @@ class BigramLanguageModel(nn.Module):
         return idx
     
 # Create the model
-model = BigramLanguageModel(vocab_size=vocab_size)
+model = BigramLanguageModel()
 m = model.to(DEVICE)
 
 # Create the optimizer
@@ -115,4 +118,4 @@ for iter in range(MAX_ITERS):
 
 # Generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=DEVICE)
-print(decode(m.generate(context, max_new_tokens=300).tolist()[0]))
+print(''.join(decode(m.generate(context, max_new_tokens=300).tolist()[0])))
