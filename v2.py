@@ -131,12 +131,14 @@ class Block(nn.Module):
         self.sa = MultiHeadAttention(n_head, head_size)
         # Computation
         self.ffwd = FeedForward(n_embed)
+        self.ln1 = nn.LayerNorm(n_embed)
+        self.ln2 = nn.LayerNorm(n_embed)
 
     def forward(self, x):
         # check out "Deep Residual Learning for Image Recognition" on
         # gpt-dev.ipynb
-        x = x + self.sa(x)
-        x = x + self.ffwd(x)
+        x = x + self.sa(self.ln1(x))
+        x = x + self.ffwd(self.ln2(x))
         return x
 
 
