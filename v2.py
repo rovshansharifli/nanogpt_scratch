@@ -87,9 +87,15 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-    
+        self.proj = nn.Linear(N_EMBED, N_EMBED)
+
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)
+        # Output of the self attention itself
+        out = torch.cat([h(x) for h in self.heads], dim=-1)
+        # And the applying the projection
+        # Here is projecting back into the residual pathway
+        out = self.proj(out)
+        return out
 
 class FeedForward(nn.Module):
     """A simple linear layer followed by a non-linearity:
@@ -104,12 +110,35 @@ class FeedForward(nn.Module):
     def __init__(self, n_embed):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embed, n_embed),
+            # Adding 4 is because of the attention is 
+            # all you need paper mention
+            nn.Linear(n_embed, 4 * n_embed),
             nn.ReLU(),
+            nn.Linear(4 * n_embed, n_embed),
         )
     
     def forward(self, x):
         return self.net(x)
+
+
+class Block(nn.Module):
+    """ Transformer block: communication followed by computation """
+    
+    def __init__(self, n_embed, n_head):
+        super().__init__()
+        head_size = n_embed // n_head
+        # Coomunication
+        self.sa = MultiHeadAttention(n_head, head_size)
+        # Computation
+        self.ffwd = FeedForward(n_embed)
+
+    def forward(self, x):
+        # check out "Deep Residual Learning for Image Recognition" on
+        # gpt-dev.ipynb
+        x = x + self.sa(x)
+        x = x + self.ffwd(x)
+        return x
+
 
 class BigramLanguageModel(nn.Module):
     def __init__(self):
@@ -117,8 +146,13 @@ class BigramLanguageModel(nn.Module):
         self.token_embedding_table = nn.Embedding(vocab_size, N_EMBED)
         # positional embedding
         self.positional_embedding_table = nn.Embedding(BLOCK_SIZE, N_EMBED)
-        self.sa_head = MultiHeadAttention(4, N_EMBED//4)
-        self.ffwd = FeedForward(N_EMBED)
+        # self.sa_head = MultiHeadAttention(4, N_EMBED//4)
+        # self.ffwd = FeedForward(N_EMBED)
+        self.blocks = nn.Sequential(
+            Block(N_EMBED, n_head=4),
+            Block(N_EMBED, n_head=4),
+            Block(N_EMBED, n_head=4),
+        )
         self.lm_head = nn.Linear(N_EMBED, vocab_size)
     
     def forward(self, idx, targets=None):
@@ -126,8 +160,9 @@ class BigramLanguageModel(nn.Module):
         tok_embed = self.token_embedding_table(idx) # (B, T, C)
         pos_emb = self.positional_embedding_table(torch.arange(T, device=DEVICE)) # (T, C)
         x = tok_embed + pos_emb # (B, T, C)
-        x = self.sa_head(x)
-        x = self.ffwd(x)
+        # x = self.sa_head(x)
+        # x = self.ffwd(x)
+        x = self.blocks(x)
         logits = self.lm_head(x) # (B, T, vocab_size)
 
         if targets is None:
